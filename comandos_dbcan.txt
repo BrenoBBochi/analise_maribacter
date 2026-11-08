@@ -1,0 +1,43 @@
+# Passo 1
+conda create -n dbcan_env python=3.9
+conda activate dbcan_env
+conda install -c bioconda run_dbcan
+mamba install -c conda-forge parallel -y
+
+# Passo 2
+mkdir -p /home/breno_bioinfo/resultados_dbcan3_integrado
+ls /home/breno_bioinfo/proteinas_dbcan_consolidadas/*.faa | parallel -j 5 "run_dbcan CAZyme_annotation --input_raw_data {} --output_dir /home/breno_bioinfo/resultados_dbcan3_integrado/{/.} --mode protein --methods hmm,dbCANsub --threads 2 --db_dir /home/breno_bioinfo/dbcan_databases"
+
+# Passo 3 (Salvar o conteúdo abaixo em um arquivo chamado juntar_dbcan_bruto.py)
+import os
+import glob
+dir_resultados = "/home/breno_bioinfo/resultados_dbcan3_integrado"
+arquivo_saida = "tabela_dbcan_suplementar_bruta.tsv"
+pastas_amostras = glob.glob(os.path.join(dir_resultados, "*"))
+with open(arquivo_saida, 'w') as f_out:
+    cabecalho_escrito = False
+    
+    for pasta in pastas_amostras:
+        if not os.path.isdir(pasta): continue
+        
+        cepa = os.path.basename(pasta)
+        overview_path = os.path.join(pasta, "overview.tsv")
+        
+        if os.path.exists(overview_path):
+            with open(overview_path, 'r') as f_in:
+                linhas = f_in.readlines()
+                if not linhas or len(linhas) < 2: continue
+                
+                if not cabecalho_escrito:
+                    cabecalho_original = linhas[0].strip('\n')
+                    f_out.write(f"Amostra\t{cabecalho_original}\n")
+                    cabecalho_escrito = True
+                    
+                for linha in linhas[1:]:
+                    linha_limpa = linha.strip('\n')
+                    if linha_limpa:
+                        f_out.write(f"{cepa}\t{linha_limpa}\n")
+print(f"Tabela suplementar gerada com sucesso em: {arquivo_saida}")
+
+# Passo 4
+python3 juntar_dbcan_bruto.py

@@ -1,0 +1,53 @@
+# Passo 1
+mamba env update --file environment.yml
+
+# Passo 2 (Salvar o conteúdo abaixo em um arquivo chamado fix_gbk_biopython.py)
+import os
+from Bio import SeqIO
+input_root = "../resultados_antismash_completos"
+output_dir = "../inputs_bigscape"
+os.makedirs(output_dir, exist_ok=True)
+for f in os.listdir(output_dir):
+    if f.endswith(".gbk"):
+        os.remove(os.path.join(output_dir, f))
+count = 0
+for root, dirs, files in os.walk(input_root):
+    for file in files:
+        if "region" in file and file.endswith(".gbk"):
+            folder_name = os.path.basename(root)
+            parts = folder_name.split("_")
+            genome_id = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 else folder_name
+            filepath = os.path.join(root, file)
+            records = list(SeqIO.parse(filepath, "genbank"))
+            for rec in records:
+                rec.annotations["source"] = genome_id
+                rec.annotations["organism"] = genome_id
+                rec.annotations["taxonomy"] = [
+                    "Bacteria", "Bacteroidota", "Flavobacteriia",
+                    "Flavobacteriales", "Flavobacteriaceae", "Maribacter"
+                ]
+                for feat in rec.features:
+                    if feat.type == "source":
+                        feat.qualifiers["organism"] = [genome_id]
+            new_filename = f"{genome_id}_{file}"
+            out_path = os.path.join(output_dir, new_filename)
+            SeqIO.write(records, out_path, "genbank")
+            count += 1
+print(f"Sucesso! {count} arquivos atualizados em {output_dir}.")
+
+# Passo 3
+python fix_gbk_biopython.py
+python -c "from Bio import SeqIO; import glob; r = SeqIO.read(glob.glob('../inputs_bigscape/*.gbk')[0], 'genbank'); print('Organismo lido:', r.annotations.get('organism'))"
+
+# Passo 4
+rm -rf ../resultados_bigscape
+mkdir ../resultados_bigscape
+python bigscape.py cluster \
+    -i ../inputs_bigscape \
+    -o ../resultados_bigscape \
+    -p ./pfam_db/Pfam-A.hmm \
+    --cores 10 \
+    -m 3.1 \
+    --gcf-cutoffs 0.1,0.3,0.5 \
+    --include-singletons \
+    --mix
